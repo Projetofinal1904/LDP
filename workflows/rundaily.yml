@@ -26,4 +26,4 @@ jobs:
           SHOPIFY_TOKEN: ${{ secrets.SHOPIFY_TOKEN }}
           SHOP_NAME: ${{ secrets.SHOP_NAME }}
           NEON_URL: ${{ secrets.NEON_URL }}
-        run: python shopify_full_pipeline.py
+        run: python shopify_to_neon_full.py
