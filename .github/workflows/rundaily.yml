@@ -1,0 +1,29 @@
+name: Run Shopify Sync Daily
+
+on:
+  schedule:
+    - cron: '0 8 * * *'  # Todos os dias às 08:00 UTC (09h em Portugal)
+  workflow_dispatch:
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.10
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Python script
+        env:
+          SHOPIFY_TOKEN: ${{ secrets.SHOPIFY_TOKEN }}
+          SHOP_NAME: ${{ secrets.SHOP_NAME }}
+          NEON_URL: ${{ secrets.NEON_URL }}
+        run: python shopify_to_neon_full.py
