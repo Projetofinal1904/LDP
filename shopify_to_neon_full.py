@@ -17,26 +17,32 @@ HEADERS = {
 
 API_VERSION = "2023-10"
 
-# Função com paginação para buscar todas as encomendas
 def fetch_all_orders():
     all_orders = []
-    url = f"https://{SHOP_NAME}/admin/api/{API_VERSION}/orders.json?limit=250&status=any"
-    
+    base_url = f"https://{SHOP_NAME}/admin/api/{API_VERSION}/orders.json"
+    params = {
+        "limit": 250,
+        "status": "any",
+        "order": "created_at asc"
+    }
+    url = base_url
+
     while url:
-        response = requests.get(url, headers=HEADERS)
+        response = requests.get(url, headers=HEADERS, params=params if '?' not in url else None)
         if response.status_code != 200:
-            print(f"❌ Erro {response.status_code} ao aceder a {url}")
+            print(f"❌ Erro {response.status_code} ao aceder: {url}")
             break
 
-        data = response.json().get('orders', [])
+        data = response.json().get("orders", [])
         all_orders.extend(data)
 
-        # Verificar se há próxima página
-        link = response.headers.get('Link')
-        if link and 'rel="next"' in link:
-            next_url = [l for l in link.split(',') if 'rel="next"' in l]
-            if next_url:
-                url = next_url[0].split(';')[0].strip().strip('<>')
+        # Verifica o header de paginação
+        link_header = response.headers.get("Link", "")
+        if 'rel="next"' in link_header:
+            next_link = [x for x in link_header.split(",") if 'rel="next"' in x]
+            if next_link:
+                url = next_link[0].split(";")[0].strip().strip("<>")
+                params = None  # já está no link
             else:
                 url = None
         else:
@@ -44,7 +50,6 @@ def fetch_all_orders():
 
     return all_orders
 
-# Sincronizar dados com Neon
 def sync_table(df, table_name, id_column):
     engine = create_engine(NEON_URL)
     with engine.connect() as conn:
@@ -59,7 +64,6 @@ def sync_table(df, table_name, id_column):
         else:
             print(f"ℹ️ Nenhum novo registo para adicionar a {table_name}")
 
-# Processar encomendas
 def process_orders():
     orders = fetch_all_orders()
     if not orders:
@@ -67,18 +71,13 @@ def process_orders():
         return
 
     df = pd.json_normalize(orders)
-    
-    # Apenas as colunas relevantes
-    df = df[[
-        'id', 'created_at', 'total_price', 'currency',
-        'shipping_address.country'
-    ]].rename(columns={
+    df = df[[ 'id', 'created_at', 'total_price', 'currency', 'shipping_address.country' ]].rename(columns={
         'id': 'order_id',
         'shipping_address.country': 'country'
     })
 
     sync_table(df, 'orders', 'order_id')
 
-# Executar
 if __name__ == "__main__":
     process_orders()
+
