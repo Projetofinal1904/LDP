@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 import requests
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -17,15 +17,34 @@ HEADERS = {
 
 API_VERSION = "2023-10"
 
-def fetch_data(endpoint, params=None):
-    url = f"https://{SHOP_NAME}/admin/api/{API_VERSION}/{endpoint}.json"
-    response = requests.get(url, headers=HEADERS, params=params)
-    if response.status_code == 200:
-        return response.json()
-    else:
-        print(f"Erro {response.status_code} ao aceder a {endpoint}")
-        return {}
+# Função com paginação para buscar todas as encomendas
+def fetch_all_orders():
+    all_orders = []
+    url = f"https://{SHOP_NAME}/admin/api/{API_VERSION}/orders.json?limit=250&status=any"
+    
+    while url:
+        response = requests.get(url, headers=HEADERS)
+        if response.status_code != 200:
+            print(f"❌ Erro {response.status_code} ao aceder a {url}")
+            break
 
+        data = response.json().get('orders', [])
+        all_orders.extend(data)
+
+        # Verificar se há próxima página
+        link = response.headers.get('Link')
+        if link and 'rel="next"' in link:
+            next_url = [l for l in link.split(',') if 'rel="next"' in l]
+            if next_url:
+                url = next_url[0].split(';')[0].strip().strip('<>')
+            else:
+                url = None
+        else:
+            url = None
+
+    return all_orders
+
+# Sincronizar dados com Neon
 def sync_table(df, table_name, id_column):
     engine = create_engine(NEON_URL)
     with engine.connect() as conn:
@@ -37,10 +56,19 @@ def sync_table(df, table_name, id_column):
                 print(f"✅ {len(novos)} novos registos adicionados a {table_name}")
             except Exception as e:
                 print(f"❌ Erro ao escrever em {table_name}:", e)
+        else:
+            print(f"ℹ️ Nenhum novo registo para adicionar a {table_name}")
 
+# Processar encomendas
 def process_orders():
-    orders = fetch_data('orders', {'limit': 250, 'status': 'any'})
-    df = pd.json_normalize(orders.get('orders', []))
+    orders = fetch_all_orders()
+    if not orders:
+        print("ℹ️ Nenhuma encomenda encontrada.")
+        return
+
+    df = pd.json_normalize(orders)
+    
+    # Apenas as colunas relevantes
     df = df[[
         'id', 'created_at', 'total_price', 'currency',
         'shipping_address.country'
@@ -48,7 +76,9 @@ def process_orders():
         'id': 'order_id',
         'shipping_address.country': 'country'
     })
+
     sync_table(df, 'orders', 'order_id')
 
+# Executar
 if __name__ == "__main__":
     process_orders()
