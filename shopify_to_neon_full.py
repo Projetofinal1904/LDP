@@ -43,14 +43,10 @@ def process_orders():
     df = pd.json_normalize(orders.get('orders', []))
     df = df[[
         'id', 'created_at', 'total_price', 'currency',
-        'shipping_address.city', 'shipping_address.country',
-        'shipping_address.zip', 'shipping_address.address1'
+        'shipping_address.country'
     ]].rename(columns={
         'id': 'order_id',
-        'shipping_address.city': 'city',
-        'shipping_address.country': 'country',
-        'shipping_address.zip': 'zip',
-        'shipping_address.address1': 'address'
+        'shipping_address.country': 'country'
     })
     sync_table(df, 'orders', 'order_id')
 
