@@ -2,7 +2,7 @@ name: Run Shopify Sync Daily
 
 on:
   schedule:
-    - cron: '0 8 * * *'  # Todos os dias às 08:00 UTC (09h em Portugal)
+    - cron: '0 8 * * *'  # Todos os dias às 09:00 UTC (10h em Portugal)
   workflow_dispatch:      # Permite execução manual
 
 jobs:
