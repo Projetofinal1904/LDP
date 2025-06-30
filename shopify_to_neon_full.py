@@ -30,7 +30,7 @@ def fetch_all_orders():
     while url:
         response = requests.get(url, headers=HEADERS, params=params if '?' not in url else None)
         if response.status_code != 200:
-            print(f"❌ Erro {response.status_code} ao aceder: {url}")
+            print(f"Erro {response.status_code} ao aceder: {url}")
             break
 
         data = response.json().get("orders", [])
@@ -58,16 +58,16 @@ def sync_table(df, table_name, id_column):
         if not novos.empty:
             try:
                 novos.to_sql(table_name, conn, if_exists='append', index=False)
-                print(f"✅ {len(novos)} novos registos adicionados a {table_name}")
+                print(f"{len(novos)} novos registos adicionados a {table_name}")
             except Exception as e:
-                print(f"❌ Erro ao escrever em {table_name}:", e)
+                print(f"Erro ao escrever em {table_name}:", e)
         else:
-            print(f"ℹ️ Nenhum novo registo para adicionar a {table_name}")
+            print(f"Nenhum novo registo para adicionar a {table_name}")
 
 def process_orders():
     orders = fetch_all_orders()
     if not orders:
-        print("ℹ️ Nenhuma encomenda encontrada.")
+        print("Nenhuma encomenda encontrada.")
         return
 
     df = pd.json_normalize(orders)
