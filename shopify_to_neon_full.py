@@ -4,6 +4,7 @@ import requests
 from sqlalchemy import create_engine
 from dotenv import load_dotenv
 
+# Carregar variáveis do .env
 load_dotenv()
 
 SHOP_NAME = os.getenv("SHOP_NAME")
@@ -17,6 +18,7 @@ HEADERS = {
 
 API_VERSION = "2023-10"
 
+# Extrair todas as encomendas com paginação
 def fetch_all_orders():
     all_orders = []
     base_url = f"https://{SHOP_NAME}/admin/api/{API_VERSION}/orders.json"
@@ -36,13 +38,13 @@ def fetch_all_orders():
         data = response.json().get("orders", [])
         all_orders.extend(data)
 
-        # Verifica o header de paginação
+        # Verificar se há próxima página
         link_header = response.headers.get("Link", "")
         if 'rel="next"' in link_header:
             next_link = [x for x in link_header.split(",") if 'rel="next"' in x]
             if next_link:
                 url = next_link[0].split(";")[0].strip().strip("<>")
-                params = None  # já está no link
+                params = None
             else:
                 url = None
         else:
@@ -50,10 +52,15 @@ def fetch_all_orders():
 
     return all_orders
 
+# Sincronizar com a base de dados (apenas novos)
 def sync_table(df, table_name, id_column):
     engine = create_engine(NEON_URL)
     with engine.connect() as conn:
-        existing = pd.read_sql(f"SELECT {id_column} FROM {table_name}", conn) if engine.dialect.has_table(conn, table_name) else pd.DataFrame(columns=[id_column])
+        if engine.dialect.has_table(conn, table_name):
+            existing = pd.read_sql(f"SELECT {id_column} FROM {table_name}", conn)
+        else:
+            existing = pd.DataFrame(columns=[id_column])
+
         novos = df[~df[id_column].isin(existing[id_column])]
         if not novos.empty:
             try:
@@ -64,20 +71,65 @@ def sync_table(df, table_name, id_column):
         else:
             print(f"Nenhum novo registo para adicionar a {table_name}")
 
+# Extrair items por encomenda (line_items)
+def extract_line_items(orders):
+    items = []
+    for order in orders:
+        for item in order.get("line_items", []):
+            items.append({
+                "order_id": order["id"],
+                "product_id": item.get("product_id"),
+                "variant_id": item.get("variant_id"),
+                "title": item.get("title"),
+                "quantity": item.get("quantity"),
+                "price": item.get("price"),
+                "sku": item.get("sku"),
+                "vendor": item.get("vendor"),
+                "fulfillment_status": item.get("fulfillment_status")
+            })
+    return pd.DataFrame(items)
+
+# Extrair clientes
+def extract_customers(orders):
+    customers = []
+    for order in orders:
+        customer = order.get("customer")
+        if customer:
+            customers.append({
+                "id": customer.get("id"),
+                "first_name": customer.get("first_name"),
+                "last_name": customer.get("last_name"),
+                "email": customer.get("email"),
+                "phone": customer.get("phone"),
+                "created_at": customer.get("created_at")
+            })
+    return pd.DataFrame(customers).drop_duplicates(subset=["id"])
+
+# Processo completo
 def process_orders():
     orders = fetch_all_orders()
     if not orders:
         print("Nenhuma encomenda encontrada.")
         return
 
-    df = pd.json_normalize(orders)
-    df = df[[ 'id', 'created_at', 'total_price', 'currency', 'shipping_address.country' ]].rename(columns={
+    # Encomendas
+    df_orders = pd.json_normalize(orders)
+    df_orders = df_orders[['id', 'created_at', 'total_price', 'currency', 'shipping_address.country']].rename(columns={
         'id': 'order_id',
         'shipping_address.country': 'country'
     })
+    sync_table(df_orders, 'orders', 'order_id')
 
-    sync_table(df, 'orders', 'order_id')
+    # Itens das encomendas
+    df_items = extract_line_items(orders)
+    sync_table(df_items, 'line_items', 'variant_id')  # Ajusta se tiver duplicados
 
+    # Clientes
+    df_customers = extract_customers(orders)
+    sync_table(df_customers, 'customers', 'id')
+
+# Executar
 if __name__ == "__main__":
     process_orders()
+
 
