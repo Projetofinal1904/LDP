@@ -18,7 +18,7 @@ HEADERS = {
 
 API_VERSION = "2023-10"
 
-# Extrair todas as encomendas com paginação
+# 🔄 Obter todas as encomendas com paginação
 def fetch_all_orders():
     all_orders = []
     base_url = f"https://{SHOP_NAME}/admin/api/{API_VERSION}/orders.json"
@@ -38,7 +38,6 @@ def fetch_all_orders():
         data = response.json().get("orders", [])
         all_orders.extend(data)
 
-        # Verificar se há próxima página
         link_header = response.headers.get("Link", "")
         if 'rel="next"' in link_header:
             next_link = [x for x in link_header.split(",") if 'rel="next"' in x]
@@ -52,7 +51,7 @@ def fetch_all_orders():
 
     return all_orders
 
-# Sincronizar com a base de dados (apenas novos)
+# 🔄 Sincronizar dados na tabela (só novos registos)
 def sync_table(df, table_name, id_column):
     engine = create_engine(NEON_URL)
     with engine.connect() as conn:
@@ -62,6 +61,10 @@ def sync_table(df, table_name, id_column):
             existing = pd.DataFrame(columns=[id_column])
 
         novos = df[~df[id_column].isin(existing[id_column])]
+
+        # Elimina colunas inexistentes para evitar erro
+        df = df[[col for col in df.columns if col in existing.columns or existing.empty]]
+
         if not novos.empty:
             try:
                 novos.to_sql(table_name, conn, if_exists='append', index=False)
@@ -71,7 +74,7 @@ def sync_table(df, table_name, id_column):
         else:
             print(f"Nenhum novo registo para adicionar a {table_name}")
 
-# Extrair items por encomenda (line_items)
+# 🔍 Extrair produtos vendidos (line_items)
 def extract_line_items(orders):
     items = []
     for order in orders:
@@ -84,35 +87,35 @@ def extract_line_items(orders):
                 "quantity": item.get("quantity"),
                 "price": item.get("price"),
                 "sku": item.get("sku"),
-                "vendor": item.get("vendor"),
-                "fulfillment_status": item.get("fulfillment_status")
+                # "vendor": item.get("vendor"),  # só se a coluna existir
+                # "fulfillment_status": item.get("fulfillment_status")
             })
     return pd.DataFrame(items)
 
-# Extrair clientes
+# 👤 Extrair clientes
 def extract_customers(orders):
     customers = []
     for order in orders:
         customer = order.get("customer")
         if customer:
             customers.append({
-                "id": customer.get("id"),
+                "customer_id": customer.get("id"),
                 "first_name": customer.get("first_name"),
                 "last_name": customer.get("last_name"),
                 "email": customer.get("email"),
                 "phone": customer.get("phone"),
                 "created_at": customer.get("created_at")
             })
-    return pd.DataFrame(customers).drop_duplicates(subset=["id"])
+    return pd.DataFrame(customers).drop_duplicates(subset=["customer_id"])
 
-# Processo completo
+# 🚀 Processo principal
 def process_orders():
     orders = fetch_all_orders()
     if not orders:
         print("Nenhuma encomenda encontrada.")
         return
 
-    # Encomendas
+    # 🧾 Encomendas
     df_orders = pd.json_normalize(orders)
     df_orders = df_orders[['id', 'created_at', 'total_price', 'currency', 'shipping_address.country']].rename(columns={
         'id': 'order_id',
@@ -120,16 +123,17 @@ def process_orders():
     })
     sync_table(df_orders, 'orders', 'order_id')
 
-    # Itens das encomendas
+    # 📦 Produtos por encomenda
     df_items = extract_line_items(orders)
-    sync_table(df_items, 'line_items', 'variant_id')  # Ajusta se tiver duplicados
+    sync_table(df_items, 'line_items', 'variant_id')  # ou outra chave se necessário
 
-    # Clientes
+    # 👤 Clientes
     df_customers = extract_customers(orders)
-    sync_table(df_customers, 'customers', 'id')
+    sync_table(df_customers, 'customers', 'customer_id')
 
-# Executar
+# ▶️ Executar script
 if __name__ == "__main__":
     process_orders()
+
 
 
