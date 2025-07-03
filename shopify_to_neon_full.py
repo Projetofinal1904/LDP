@@ -18,7 +18,7 @@ HEADERS = {
 
 API_VERSION = "2023-10"
 
-# 🔄 Obter todas as encomendas com paginação
+# Obter todas as encomendas com paginação
 def fetch_all_orders():
     all_orders = []
     base_url = f"https://{SHOP_NAME}/admin/api/{API_VERSION}/orders.json"
@@ -51,7 +51,7 @@ def fetch_all_orders():
 
     return all_orders
 
-# 🔄 Sincronizar dados na tabela (só novos registos)
+# Sincronizar dados na tabela (só novos registos)
 def sync_table(df, table_name, id_column):
     engine = create_engine(NEON_URL)
     with engine.connect() as conn:
@@ -74,7 +74,7 @@ def sync_table(df, table_name, id_column):
         else:
             print(f"Nenhum novo registo para adicionar a {table_name}")
 
-# 🔍 Extrair produtos vendidos (line_items)
+# Extrair produtos vendidos (line_items)
 def extract_line_items(orders):
     items = []
     for order in orders:
@@ -92,7 +92,7 @@ def extract_line_items(orders):
             })
     return pd.DataFrame(items)
 
-# 👤 Extrair clientes
+# Extrair clientes
 def extract_customers(orders):
     customers = []
     for order in orders:
@@ -123,15 +123,15 @@ def process_orders():
     })
     sync_table(df_orders, 'orders', 'order_id')
 
-    # 📦 Produtos por encomenda
+    # Produtos por encomenda
     df_items = extract_line_items(orders)
     sync_table(df_items, 'line_items', 'variant_id')  # ou outra chave se necessário
 
-    # 👤 Clientes
+    # Clientes
     df_customers = extract_customers(orders)
     sync_table(df_customers, 'customers', 'customer_id')
 
-# ▶️ Executar script
+# Executar script
 if __name__ == "__main__":
     process_orders()
 
