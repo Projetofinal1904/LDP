@@ -108,14 +108,14 @@ def extract_customers(orders):
             })
     return pd.DataFrame(customers).drop_duplicates(subset=["customer_id"])
 
-# 🚀 Processo principal
+# Processo principal
 def process_orders():
     orders = fetch_all_orders()
     if not orders:
         print("Nenhuma encomenda encontrada.")
         return
 
-    # 🧾 Encomendas
+    # Encomendas
     df_orders = pd.json_normalize(orders)
     df_orders = df_orders[['id', 'created_at', 'total_price', 'currency', 'shipping_address.country']].rename(columns={
         'id': 'order_id',
